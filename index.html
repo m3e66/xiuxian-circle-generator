@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="玄纹：修仙风格阵法生成器。随机混合莲华、太极、八卦和符印，导出透明像素 PNG 与 SVG。">
+<title>玄纹 · 修仙阵法生成器</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#080e12;color:#e5dfce;font:14px system-ui}main{display:grid;grid-template-columns:300px 1fr;min-height:100vh}aside{padding:28px;background:#101b20;border-right:1px solid #314348}h1{font:30px serif;margin:0;color:#e7c583}small{color:#9aaeb2;line-height:1.8}label{display:block;margin:21px 0 7px;color:#c4cec7}input,select,button{width:100%;padding:10px;background:#19282e;color:#e5dfce;border:1px solid #405356;border-radius:5px}input[type=checkbox]{width:auto}input[type=color]{height:42px}button{cursor:pointer;margin-top:10px}button:hover{border-color:#d0b576}#stage{display:grid;place-items:center;padding:24px;background:radial-gradient(ellipse,#183039 0%,#080e12 70%)}#stage svg{width:min(100%,850px);height:auto;overflow:visible}.row{display:flex;gap:8px}.note{margin-top:22px}a{color:#b7d6d1}@media(max-width:750px){main{grid-template-columns:1fr}aside{border:0}#stage{min-height:65vh}}
+.gallery{position:fixed;inset:0;z-index:10;background:#111;overflow:auto;padding:18px}.gallery[hidden]{display:none}.gallery header{position:sticky;top:0;background:#111;padding:8px;display:flex;align-items:center;gap:14px;z-index:1}.gallery header button{width:auto;margin:0}.gallery-grid{display:grid;grid-template-columns:repeat(10,minmax(115px,1fr));gap:12px}.gallery-card{background:#222;border:1px solid #333;padding:8px;margin:0;min-width:0}.gallery-card img{display:block;width:100%;aspect-ratio:1;background:#202020;border:1px solid #111;image-rendering:pixelated}.gallery-card span{display:block;font:11px monospace;margin-bottom:7px;overflow-wrap:anywhere}.gallery-card:focus{outline:2px solid #e7c583}@media(max-width:1300px){.gallery-grid{grid-template-columns:repeat(6,minmax(100px,1fr))}}@media(max-width:750px){.gallery-grid{grid-template-columns:repeat(3,minmax(85px,1fr))}.gallery header{flex-wrap:wrap}}
+</style>
+<main><aside><h1>玄纹</h1><small>修仙阵法生成器 · Cultivation circles</small>
+<label>阵法 / Formation</label><select id="preset"><option value="mixed">三层混合 · 10 × 10 × 10</option></select>
+<label>外层 / Outer</label><select id="outer"></select><label>中层 / Middle</label><select id="middle"></select><label>内层 / Inner</label><select id="inner"></select><label>种子 / Seed</label><input id="seed" value="玄天-128">
+<label>繁密 / Detail</label><input id="detail" type="range" min="1" max="5" value="4">
+<label>线宽 / Stroke</label><input id="weight" type="range" min="0.6" max="3" step="0.1" value="1.2">
+<label>灵光 / Color</label><input id="color" type="color" value="#ffffff">
+<label><input id="pixel" type="checkbox" checked> 白色像素 / White pixels</label>
+<label><input id="glow" type="checkbox" checked> 光晕 / Glow</label><label><input id="motion" type="checkbox" checked> 分层旋转 / Animate</label>
+<label>导出尺寸 / Export pixels</label><select id="size"><option>128</option><option selected>256</option><option>512</option><option>1024</option><option>2048</option><option>4096</option></select>
+<button id="galleryOpen">生成 40 阵法图库 / 40-design gallery</button><button id="random">全部随机 / Randomize all layers</button><button id="seedOnly">只换种子 / Keep selected layers</button><p id="combination" role="status"></p><div class="row"><button id="svg">SVG</button><button id="png">透明 PNG</button></div><button id="sheet">16 帧动画图集 / Sprite sheet</button>
+<small class="note" id="status" role="status">背景仅供预览，导出透明。Animated preview; transparent exports.</small>
+<p><small>Inspired by <a href="https://github.com/CiaccoDavide/Alchemy-Circles-Generator">CiaccoDavide / ACG</a>. Original implementation. No external libraries.</small></p>
+</aside><section id="stage" aria-label="阵法预览"></section></main>
+<section id="gallery" class="gallery" hidden aria-label="阵法图库"><header><strong>40 阵法 · 点击选择 / Click to select</strong><button id="galleryAgain">重新生成 / Generate again</button><button id="galleryClose">返回 / Close</button></header><div id="galleryGrid" class="gallery-grid"></div></section>
+<script>
+
+const SYMBOL_NAMES=['三瓣莲','五瓣莲','对生叶','竹叶','莲苞','灵芽','祥云','如意云','双卷云','云山','流水','焰心','三焰','雷印','日轮','月印','星珠','金刚杵','玉璧','剑印','山印','水印','封印','结印'];
+const SYMBOL_PATHS=[
+ 'M0 12C-12 8 -15 -2 -13 -9C-5 -7 -2 0 0 12ZM0 12C12 8 15 -2 13 -9C5 -7 2 0 0 12ZM0 12C-8 2 -7 -10 0 -18C7 -10 8 2 0 12Z',
+ 'M0 14C-17 10 -19 1 -16 -5C-8 -4 -2 4 0 14ZM0 14C17 10 19 1 16 -5C8 -4 2 4 0 14ZM0 13C-12 4 -12 -8 -7 -13C-1 -9 1 2 0 13ZM0 13C12 4 12 -8 7 -13C1 -9 -1 2 0 13ZM0 12C-6 0 -5 -12 0 -18C5 -12 6 0 0 12Z',
+ 'M0 16V-14M-2 7C-14 5 -18 -2 -15 -9C-5 -7 -2 -1 -2 7ZM2 7C14 5 18 -2 15 -9C5 -7 2 -1 2 7ZM0 -8C-5 -12 -4 -16 0 -19C4 -16 5 -12 0 -8Z',
+ 'M0 18V-17M0 3C-12 2 -17 -5 -16 -13C-6 -11 -2 -5 0 3ZM0 -3C12 -4 17 -10 16 -17C6 -15 2 -9 0 -3ZM-3 10H3M-3 -7H3',
+ 'M0 16C-15 7 -13 -7 0 -18C13 -7 15 7 0 16ZM0 16C-4 4 -3 -8 0 -18M0 16C4 4 3 -8 0 -18',
+ 'M0 18V-3M-1 2C-16 2 -19 -8 -14 -15C-4 -13 0 -7 -1 2ZM1 2C16 2 19 -8 14 -15C4 -13 0 -7 1 2Z',
+ 'M-16 10C-22 5 -17 -4 -10 -3C-11 -15 7 -19 12 -8C22 -9 24 9 14 10H-16M-8 4C-12 -3 -3 -9 1 -4C6 3 13 -3 10 -8',
+ 'M0 16V4C-17 5 -21 -5 -13 -12C-7 -17 -1 -11 0 -6C1 -11 7 -17 13 -12C21 -5 17 5 0 4M-7 -7C-11 -9 -13 -4 -8 -2M7 -7C11 -9 13 -4 8 -2',
+ 'M0 16C-5 5 -18 7 -18 -5C-18 -17 -3 -18 -3 -8C-3 0 -13 0 -12 -6M0 16C5 5 18 7 18 -5C18 -17 3 -18 3 -8C3 0 13 0 12 -6',
+ 'M-18 10L-8 -8L-1 3L8 -17L18 10M-18 16H18M-7 10H7',
+ 'M-18 -9C-9 -16 -1 1 8 -6C12 -10 17 -10 19 -8M-18 1C-9 -6 -1 11 8 4C12 0 17 0 19 2M-18 11C-9 4 -1 21 8 14',
+ 'M0 17C-16 12 -17 -2 -7 -13C-8 -3 0 -3 0 -18C15 -9 18 10 0 17ZM0 12C-6 7 -4 0 0 -4C5 1 7 8 0 12Z',
+ 'M0 17C-18 13 -20 0 -14 -10C-15 -1 -8 2 -6 -5C-5 -10 -2 -14 0 -18C2 -14 5 -10 6 -5C8 2 15 -1 14 -10C20 0 18 13 0 17Z',
+ 'M5 -18L-12 3H-1L-5 18L13 -5H2Z',
+ 'M0 -18V-12M0 12V18M-18 0H-12M12 0H18M-13 -13L-9 -9M9 9L13 13M13 -13L9 -9M-9 9L-13 13',
+ 'M7 -17C-16 -18 -21 12 1 17C8 19 15 14 18 9C-1 12 -9 -9 7 -17Z',
+ 'M0 -18L4 -5L17 0L4 5L0 18L-4 5L-17 0L-4 -5ZM0 -6L6 0L0 6L-6 0Z',
+ 'M-4 -10H4V10H-4ZM-9 -18L0 -13L9 -18L5 -8H-5ZM-9 18L0 13L9 18L5 8H-5Z',
+ 'M0 -18L18 0L0 18L-18 0ZM0 -9L9 0L0 9L-9 0Z',
+ 'M0 -19L5 -11V6H-5V-11ZM-11 6H11M0 6V17M-5 17H5',
+ 'M-18 12L-8 -7L-1 4L6 -17L18 12ZM-10 17H10',
+ 'M0 -18C-8 -7 -16 1 -12 11C-8 22 8 22 12 11C16 1 8 -7 0 -18ZM-5 9C-5 13 -1 16 3 14',
+ 'M-11 -17H11M0 -17V17M-15 -8H15M-9 0H9M-14 8H14M-7 17L0 12L7 17',
+ 'M0 -17L13 -4L0 9L-13 -4ZM0 -9L13 4L0 17L-13 4Z'
+];
+function cultivationSymbol(index){
+ if(!Number.isInteger(index)||index<0||index>=SYMBOL_PATHS.length)throw Error('Invalid symbol index');
+ return `<path d="${SYMBOL_PATHS[index]}"/>`+(index===14?'<circle r="8"/>':index===18?'<circle r="4"/>':'');
+}
+
+const FORMATION_NAMES={
+ outer:['莲瓣花冠','八卦铭盘','流云护环','断续灵轨','三才符轮','四方莲印','六方星印','卷草金轮','火纹灵环','双层莲边'],
+ middle:['重瓣莲华','阴阳八卦','云叶回廊','同心灵轨','三才灵印','四方花阵','六方灵印','卷草回纹','焰纹莲环','符箓盘'],
+ inner:['莲华心','太极','云纹心','灵气轮','三才印','四象花','六芒印','卷草心','灵焰','主符']
+};
+const STRUCTURE_NAMES=['莲华净世','太极八卦','流云灵阵','环轨灵阵','三才符阵','四方花印','六方封印','卷草法轮'];
+function formationLayers(rand,detail,family,forced={}){
+ const pick=a=>a[Math.floor(rand()*a.length)],range=(a,b)=>a+rand()*(b-a);
+ const selected=Object.fromEntries(['outer','middle','inner'].map(z=>[z,forced[z]??Math.floor(rand()*10)]));
+ for(const i of Object.values(selected))if(!Number.isInteger(i)||i<0||i>9)throw Error('Template index must be 0–9');
+ const structure=Math.floor(rand()*8),phase=range(0,TAU),n=pick([8,12,16]);
+ const repeat=(count,f)=>Array.from({length:count},(_,i)=>f(i,i*TAU/count)).join('');
+ const place=(r,a,s)=>`<g transform="translate(${pt(r,a)}) rotate(${a*180/Math.PI+90})">${s}</g>`;
+ const scale=(s,v)=>`<g transform="scale(${v})">${s}</g>`;
+ const arc=(r,a,b)=>`<path d="M${pt(r,a)}A${r} ${r} 0 ${b-a>Math.PI?1:0} 1 ${pt(r,b)}"/>`;
+ const arcs=(r,count,f=.7)=>repeat(count,(i,a)=>arc(r,a,a+TAU/count*f));
+ const gem=r=>polygon(4,r)+polygon(4,r*.5,Math.PI/4);
+ const flower=(r,count)=>lotus(count,r)+lotus(count,r*.63)+circle(r*.2);
+ const leaf=(length,width)=>`<path d="M0 0C-${width} -${length*.32} -${width*.75} -${length*.78} 0 -${length}C${width*.75} -${length*.78} ${width} -${length*.32} 0 0ZM0 0L0 -${length*.82}"/>`;
+ const flame=(length,width)=>`<path d="M0 0C-${width} -${length*.2} -${width*.6} -${length*.6} -${width*.18} -${length*.8}C-${width*.3} -${length*.4} ${width*.35} -${length*.5} 0 -${length}C${width*.7} -${length*.8} ${width*.55} -${length*.42} ${width*.25} -${length*.3}C${width*.8} -${length*.48} ${width} -${length*.14} 0 0Z"/>`;
+ function wreath(radius,count,length,width){return repeat(count,(i,a)=>place(radius,a,leaf(length,width)));}
+ function scrolls(radius,count,size){const motif=pick([6,7,8,9,10]);return repeat(count,(i,a)=>place(radius,a,scale(cultivationSymbol(motif),size*1.7)));}
+ function foliage(radius,count,size){const motif=pick([0,1,2,3,4,5]);return repeat(count,(i,a)=>place(radius,a,scale(cultivationSymbol(motif),size*1.8)));}
+ function bagua(radius,size){return repeat(8,(i,a)=>{let s='',bits=[7,3,5,1,6,2,4,0][i];for(let j=0;j<3;j++)s+=bits&(1<<j)?line(-size,j*size*.42,size,j*size*.42):line(-size,j*size*.42,-size*.24,j*size*.42)+line(size*.24,j*size*.42,size,j*size*.42);return place(radius,a,s);});}
+ function inscriptions(radius,count,size){const motifs=[Math.floor(rand()*24),Math.floor(rand()*24)];return repeat(count,(i,a)=>place(radius,a,scale(cultivationSymbol(motifs[i%2]),size)));}
+ function segmented(radius,bands){let s='';for(let j=0;j<bands;j++){const r=radius-j*11,count=pick([16,24,32]);s+=repeat(count,(i,a)=>`<g stroke-width="${j%2?2:5}">${arc(r,a+phase*.3,a+phase*.3+TAU/count*range(.35,.88))}</g>`);}return s;}
+ const o=[
+ ()=>circle(438)+circle(350)+wreath(352,n,87,16)+scrolls(395,n,.55),
+ ()=>circle(440)+circle(426)+circle(355)+bagua(382,23)+inscriptions(418,24,.4),
+ ()=>circle(435)+circle(350)+scrolls(395,n,.8)+wreath(355,n,26,10),
+ ()=>circle(439)+segmented(424,6),
+ ()=>circle(432)+circle(367)+polygon(3,432,-Math.PI/2)+repeat(3,(i,a)=>place(390,a,circle(46)+circle(40)+scale(glyph(rand),1.1)))+inscriptions(400,12,.7),
+ ()=>circle(435)+circle(357)+repeat(4,(i,a)=>place(393,a,flower(42,8)))+scrolls(400,8,.55),
+ ()=>circle(435)+polygon(6,422)+repeat(6,(i,a)=>place(402,a,circle(29)+gem(19)))+circle(350)+inscriptions(365,12,.5),
+ ()=>circle(440)+circle(352)+foliage(395,n,.8)+scrolls(400,n,.45),
+ ()=>circle(436)+circle(351)+repeat(n,(i,a)=>place(355,a,flame(78,21)))+arcs(420,n,.75),
+ ()=>circle(439)+wreath(359,16,73,13)+wreath(360,8,46,16)+circle(350)
+ ];
+ const m=[
+ ()=>lotus(pick([8,12]),325)+lotus(16,235)+scrolls(194,8,.8)+circle(116),
+ ()=>circle(315)+circle(298)+bagua(241,28)+circle(186)+inscriptions(290,16,.55),
+ ()=>circle(318)+scrolls(252,8,1.3)+foliage(183,8,.7)+circle(122),
+ ()=>segmented(315,7)+repeat(48,(i,a)=>line(...pt(216,a),...pt(i%4?208:184,a))),
+ ()=>circle(315)+polygon(3,295,-Math.PI/2)+polygon(3,260,Math.PI/2)+repeat(3,(i,a)=>place(265,a,circle(47)+flower(34,6))),
+ ()=>circle(315)+polygon(4,300,Math.PI/4)+repeat(4,(i,a)=>place(237,a,flower(64,8)))+scrolls(180,4,1),
+ ()=>circle(315)+polygon(3,290,-Math.PI/2)+polygon(3,290,Math.PI/2)+circle(170)+repeat(6,(i,a)=>place(272,a,circle(30)+gem(18))),
+ ()=>circle(319)+foliage(243,12,1.25)+scrolls(165,8,.7)+circle(120),
+ ()=>circle(318)+repeat(12,(i,a)=>place(181,a,flame(128,30)))+lotus(8,190)+circle(122),
+ ()=>circle(315)+circle(305)+circle(184)+inscriptions(253,pick([8,12,16]),1.25)+arcs(208,8)
+ ];
+ const c=[
+ ()=>flower(102,pick([8,12]))+lotus(6,47),
+ ()=>circle(102)+circle(91)+taiji(78),
+ ()=>circle(99)+scrolls(64,4,.65)+flower(26,4),
+ ()=>segmented(101,3)+repeat(32,(i,a)=>line(...pt(66,a),...pt(33,a)))+taiji(29),
+ ()=>circle(99)+repeat(3,(i,a)=>place(53,a,circle(36)+scale(glyph(rand),.8)))+polygon(3,99,-Math.PI/2),
+ ()=>flower(100,4)+flower(53,8),
+ ()=>circle(100)+polygon(3,94,-Math.PI/2)+polygon(3,94,Math.PI/2)+circle(51)+scale(glyph(rand),1.6),
+ ()=>circle(101)+foliage(62,6,.65)+flower(25,6),
+ ()=>circle(100)+`<g transform="translate(0 70)">${flame(155,48)}</g>`+lotus(6,57),
+ ()=>circle(102)+circle(92)+scale(glyph(rand),3.7)+arcs(78,4,.6)
+ ];
+ let bodies=[o[selected.outer](),m[selected.middle](),c[selected.inner]()];
+
+ const accents=[
+ ()=>wreath(175,8,148,33),
+ ()=>bagua(145,14),
+ ()=>scrolls(310,8,.55),
+ ()=>arcs(332,32,.45),
+ ()=>polygon(3,335,-Math.PI/2)+polygon(3,331,Math.PI/2),
+ ()=>repeat(4,(i,a)=>place(310,a,flower(24,6))),
+ ()=>repeat(6,(i,a)=>place(332,a,gem(14))),
+ ()=>foliage(295,8,.8)
+ ];
+ bodies[1]+=accents[structure]();
+ const layers=bodies.map((body,i)=>({body,speed:pick(i===0?[2,3,-2,-3]:[2,4,6,-2,-4,-6])}));
+ layers.selection={...selected,structure};return layers;
+}
+
+</script>
+<script>
+'use strict';
+const $=id=>document.getElementById(id),TAU=Math.PI*2;
+function rng(seed){let h=2166136261;for(const c of seed)h=Math.imul(h^c.charCodeAt(0),16777619);return()=>{h+=0x6D2B79F5;let t=Math.imul(h^(h>>>15),1|h);t^=t+Math.imul(t^(t>>>7),61|t);return((t^(t>>>14))>>>0)/4294967296;};}
+const pt=(r,a)=>[r*Math.cos(a),r*Math.sin(a)];
+const circle=r=>`<circle r="${r}"/>`;
+const line=(x,y,X,Y)=>`<path d="M${x} ${y}L${X} ${Y}"/>`;
+function polygon(n,r,phase=0,step=1){let p=[];for(let i=0;i<n;i++)p.push(pt(r,phase+TAU*i*step/n).join(','));return `<polygon points="${p.join(' ')}"/>`;}
+function glyph(rand){return cultivationSymbol(Math.floor(rand()*SYMBOL_PATHS.length));}
+function lotus(n,r){let s='';for(let i=0;i<n;i++)s+=`<path transform="rotate(${i*360/n})" d="M0 -${r*.28}C-${r*.43} -${r*.53} -${r*.28} -${r*.85} 0 -${r}C${r*.28} -${r*.85} ${r*.43} -${r*.53} 0 -${r*.28}Z"/>`;return s;}
+function taiji(r){return circle(r)+`<path d="M0 -${r}A${r/2} ${r/2} 0 0 1 0 0A${r/2} ${r/2} 0 0 0 0 ${r}"/><circle cy="-${r/2}" r="${r*.13}"/><circle cy="${r/2}" r="${r*.13}" fill="currentColor"/>`;}
+function detailedBoundary(rand,detail){
+ const repeat=(n,f)=>Array.from({length:n},(_,i)=>f(i,i*TAU/n)).join('');
+ const arc=(r,a,b)=>`<path d="M${pt(r,a)}A${r} ${r} 0 0 1 ${pt(r,b)}"/>`;
+ const style=Math.floor(rand()*4),sectors=[8,12,16][Math.floor(rand()*3)];
+ let border=circle(490)+circle(459);
+ if(detail>=3)border+=circle(484);
+ if(style===0){
+  const n=32+detail*16;
+  border+=repeat(n,(i,a)=>line(...pt(480,a),...pt(i%4?474:464,a)));
+  border+=repeat(sectors,(i,a)=>`<g transform="translate(${pt(470,a)}) rotate(${a*180/Math.PI})">${polygon(4,4)}</g>`);
+ }else if(style===1){
+  border+=repeat(16+detail*4,(i,a)=>`<g transform="translate(${pt(472,a)}) rotate(${a*180/Math.PI+90}) scale(.48)">${glyph(rand)}</g>`);
+  border+=repeat(sectors,(i,a)=>arc(480,a+.015,a+TAU/sectors-.015));
+ }else if(style===2){
+  border+=repeat(sectors*2,(i,a)=>`<g transform="translate(${pt(471,a)}) rotate(${a*180/Math.PI})">${polygon(4,10)}${detail>=3?polygon(4,5):''}</g>`);
+  border+=repeat(sectors,(i,a)=>arc(464,a+.035,a+TAU/sectors-.035));
+ }else{
+  border+=repeat(sectors*2,(i,a)=>`<path d="M${pt(462,a)}Q${pt(488,a+TAU/(sectors*4))} ${pt(462,a+TAU/(sectors*2))}"/>`);
+  if(detail>=3)border+=repeat(sectors*2,(i,a)=>`<g transform="translate(${pt(476,a+TAU/(sectors*4))})">${circle(3)}</g>`);
+ }
+ border+=repeat(sectors,(i,a)=>line(...pt(459,a),...pt(490,a)));
+ return border;
+}
+let lastSelection=null;
+function makeSVG(time=0,animate=false){const rand=rng($('seed').value),d=+$('detail').value,mode=$('preset').value,color=$('pixel').checked?'#ffffff':$('color').value;let layers=[];
+ const layer=(body,speed)=>{const phase=Math.floor(rand()*360),scale=.91+rand()*.09;layers.push(`<g transform="rotate(${phase+time*speed})"><g transform="scale(${scale})">${animate?`<animateTransform attributeName="transform" type="rotate" from="${time*speed}" to="${time*speed+Math.sign(speed)*360}" dur="${360/Math.abs(speed)}s" repeatCount="indefinite"/>`:''}${body}</g></g>`);};
+ const forced={};for(const z of ['outer','middle','inner'])if($(z).value!=='random')forced[z]=Number($(z).value);const parts=formationLayers(rand,d,mode,forced);lastSelection=parts.selection;for(const entry of parts)layer(entry.body,entry.speed);layers.push(detailedBoundary(rand,d));
+ const stroke=$('pixel').checked?Math.max(+$('weight').value,1024/(+$('size').value)*.85):+$('weight').value;
+ return `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="-512 -512 1024 1024" style="color:${color}"><defs><filter id="aura" x="-25%" y="-25%" width="150%" height="150%"><feGaussianBlur stdDeviation="4"/><feComposite in="SourceGraphic" operator="over"/></filter></defs><g fill="none" stroke="${color}" stroke-width="${stroke}" stroke-linejoin="round" stroke-linecap="round" font-family="SimSun,Songti SC,serif" ${$('glow').checked&&!$('pixel').checked?'filter="url(#aura)"':''}>${layers.join('')}</g></svg>`;}
+for(const z of ['outer','middle','inner'])$(z).innerHTML='<option value="random">随机 / Random</option>'+FORMATION_NAMES[z].map((name,i)=>'<option value="'+i+'">'+(i+1)+' · '+name+'</option>').join('');
+function refresh(){$('stage').innerHTML=makeSVG(0,$('motion').checked);$('combination').textContent=STRUCTURE_NAMES[lastSelection.structure]+' · '+['outer','middle','inner'].map(z=>FORMATION_NAMES[z][lastSelection[z]]).join(' / ');}
+for(const id of ['preset','seed','detail','weight','color','glow','motion','pixel','size','outer','middle','inner'])$(id).addEventListener('input',refresh);
+$('preset').addEventListener('change',()=>{const colors={bagua:'#f4cf80',wuxing:'#8ff0bf',lotus:'#ffc1dc',seal:'#f6b855',stars:'#c1a2ff'};$('color').value=colors[$('preset').value]||'#ffffff';refresh();});
+let seedCounter=0;
+function newSeed(){seedCounter++;const bytes=new Uint32Array(1);if(globalThis.crypto?.getRandomValues){globalThis.crypto.getRandomValues(bytes);return String(bytes[0])+'-'+seedCounter;}return Date.now().toString(36)+'-'+Math.random().toString(36).slice(2)+'-'+seedCounter;}
+$('random').onclick=()=>{const previous={...lastSelection};for(const z of ['outer','middle','inner'])$(z).value='random';for(let attempt=0;attempt<32;attempt++){$('seed').value=newSeed();refresh();if(lastSelection.structure!==previous.structure&&['outer','middle','inner'].every(z=>lastSelection[z]!==previous[z]))return;}for(const z of ['outer','middle','inner'])$(z).value=String((previous[z]+1)%10);refresh();};
+$('seedOnly').onclick=()=>{$('seed').value=newSeed();refresh();};
+function download(blob,ext){let a=document.createElement('a'),url=URL.createObjectURL(blob);a.href=url;a.download=`xiuxian-${$('preset').value}-${$('seed').value.replace(/[^\w\u4e00-\u9fff-]/g,'_')}.${ext}`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+$('svg').onclick=()=>download(new Blob([makeSVG(0,false)],{type:'image/svg+xml'}),'svg');
+async function imageAt(time){const url=URL.createObjectURL(new Blob([makeSVG(time,false)],{type:'image/svg+xml'}));try{const img=new Image();img.src=url;await img.decode();return img;}finally{URL.revokeObjectURL(url);}}
+async function exportPNG(sheet){const button=sheet?$('sheet'):$('png');button.disabled=true;try{await document.fonts.ready;const size=+$('size').value,c=document.createElement('canvas');if(sheet&&size>1024)throw Error('图集请选 512 或 1024 / Sprite sheets: choose 512 or 1024.');c.width=sheet?size*4:size;c.height=c.width;const ctx=c.getContext('2d');if(!ctx)throw Error('Canvas unavailable');for(let i=0;i<(sheet?16:1);i++){ctx.drawImage(await imageAt(i*360/16),(i%4)*size,sheet?Math.floor(i/4)*size:0,size,size);}if($("pixel").checked){const image=ctx.getImageData(0,0,c.width,c.height);for(let p=0;p<image.data.length;p+=4){image.data[p]=image.data[p+1]=image.data[p+2]=255;image.data[p+3]=image.data[p+3]>=96?255:0;}ctx.putImageData(image,0,0);}const blob=await new Promise(resolve=>c.toBlob(resolve,'image/png'));if(!blob)throw Error('PNG export failed');download(blob,sheet?'sheet.png':'png');$('status').textContent=sheet?'已导出：4×4 图集，每帧同尺寸，完整无缝循环。':'已导出透明 PNG / Transparent PNG exported.';}catch(e){$('status').textContent=e.message;}finally{button.disabled=false;}}
+
+function buildGallery(){
+ const saved={seed:$('seed').value,outer:$('outer').value,middle:$('middle').value,inner:$('inner').value};
+ const grid=$('galleryGrid');grid.replaceChildren();
+ try{
+  for(const z of ['outer','middle','inner'])$(z).value='random';
+  for(let i=0;i<40;i++){
+   const seed=newSeed();$('seed').value=seed;
+   const source=makeSVG(0,false),selection={...lastSelection};
+   const card=document.createElement('button');card.className='gallery-card';card.type='button';
+   const label=document.createElement('span');label.textContent='#'+seed;
+   const picture=document.createElement('img');picture.alt=STRUCTURE_NAMES[selection.structure];picture.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(source);
+   card.title=STRUCTURE_NAMES[selection.structure]+' · '+['outer','middle','inner'].map(z=>FORMATION_NAMES[z][selection[z]]).join(' / ');
+   card.append(label,picture);
+   card.onclick=()=>{for(const z of ['outer','middle','inner'])$(z).value='random';$('seed').value=seed;refresh();$('gallery').hidden=true;$('galleryOpen').focus();};
+   grid.append(card);
+  }
+ }finally{for(const id of Object.keys(saved))$(id).value=saved[id];refresh();}
+ $('gallery').hidden=false;$('galleryClose').focus();
+}
+$('galleryOpen').onclick=buildGallery;$('galleryAgain').onclick=buildGallery;
+$('galleryClose').onclick=()=>{$('gallery').hidden=true;$('galleryOpen').focus();};
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('gallery').hidden)$('galleryClose').onclick();});
+
+$('png').onclick=()=>exportPNG(false);$('sheet').onclick=()=>exportPNG(true);refresh();
+</script></html>
