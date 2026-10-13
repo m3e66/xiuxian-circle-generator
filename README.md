@@ -13,7 +13,7 @@ A browser-based generator for cultivation-style magic circles.
 
 ## Run
 
-Open `index.html` in a modern browser. No installation or server needed.
+https://m3e66.github.io/xiuxian-circle-generator/
 
 ## GitHub Pages
 
